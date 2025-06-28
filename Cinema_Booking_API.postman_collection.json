@@ -1,0 +1,933 @@
+{
+	"info": {
+		"_postman_id": "cinema-booking-collection-v2",
+		"name": "Cinema Booking System API - Complete",
+		"description": "Updated complete API collection with all Screen, Seat, and enhanced booking endpoints",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"version": "2.0.0"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"{{$randomEmail}}\",\n    \"password\": \"password123\",\n    \"fullName\": \"{{$randomFullName}}\",\n    \"phoneNumber\": \"090{{$randomInt}}\",\n    \"dateOfBirth\": \"1995-05-15\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/register",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Login Customer",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set(\"token\", response.token);",
+									"    pm.environment.set(\"userId\", response.userId);",
+									"    console.log(\"Token saved:\", response.token);",
+									"    console.log(\"User ID saved:\", response.userId);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"customer1@gmail.com\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Login Customer - DEBUG",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"console.log(\"=== DEBUG LOGIN RESPONSE ===\");",
+									"console.log(\"Status Code:\", pm.response.code);",
+									"console.log(\"Response Body:\", pm.response.text());",
+									"",
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    console.log(\"Parsed JSON:\", response);",
+									"    console.log(\"Available properties:\", Object.keys(response));",
+									"    ",
+									"    // Try both possible field names",
+									"    if (response.token) {",
+									"        pm.environment.set(\"token\", response.token);",
+									"        console.log(\"✅ Token saved:\", response.token);",
+									"    } else {",
+									"        console.log(\"❌ No token field found\");",
+									"    }",
+									"    ",
+									"    if (response.userId) {",
+									"        pm.environment.set(\"userId\", response.userId);",
+									"        console.log(\"✅ UserId saved:\", response.userId);",
+									"    } else if (response.id) {",
+									"        pm.environment.set(\"userId\", response.id);",
+									"        console.log(\"✅ UserId saved from id field:\", response.id);",
+									"    } else {",
+									"        console.log(\"❌ No userId or id field found\");",
+									"    }",
+									"} else {",
+									"    console.log(\"❌ Login failed with status:\", pm.response.code);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"customer1@gmail.com\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Login Admin",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set(\"adminToken\", response.token);",
+									"    pm.environment.set(\"adminId\", response.userId);",
+									"    console.log(\"Admin Token saved:\", response.token);",
+									"    console.log(\"Admin ID saved:\", response.userId);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@cinema.com\",\n    \"password\": \"admin123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Movies",
+			"item": [
+				{
+					"name": "Get All Movies",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const movies = pm.response.json();",
+									"    if (movies.length > 0) {",
+									"        pm.environment.set(\"movieId\", movies[0].id);",
+									"        console.log(\"Movie ID saved:\", movies[0].id);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/movies",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "movies"]
+						}
+					}
+				},
+				{
+					"name": "Get Movie Details",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/movies/{{movieId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "movies", "{{movieId}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Movie Showtimes",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const showtimes = pm.response.json();",
+									"    if (showtimes.length > 0) {",
+									"        pm.environment.set(\"showTimeId\", showtimes[0].id);",
+									"        pm.environment.set(\"screenId\", showtimes[0].screenId);",
+									"        pm.environment.set(\"cinemaId\", showtimes[0].cinemaId);",
+									"        console.log(\"ShowTime ID saved:\", showtimes[0].id);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/movies/{{movieId}}/showtimes",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "movies", "{{movieId}}", "showtimes"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Cinemas",
+			"item": [
+				{
+					"name": "Get All Cinemas",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const cinemas = pm.response.json();",
+									"    if (cinemas.length > 0) {",
+									"        pm.environment.set(\"cinemaId\", cinemas[0].id);",
+									"        console.log(\"Cinema ID saved:\", cinemas[0].id);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/cinemas",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "cinemas"]
+						}
+					}
+				},
+				{
+					"name": "Get Cinema Details",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/cinemas/{{cinemaId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "cinemas", "{{cinemaId}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Cinema Screens",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const screens = pm.response.json();",
+									"    if (screens.length > 0) {",
+									"        pm.environment.set(\"screenId\", screens[0].id);",
+									"        console.log(\"Screen ID from cinema:\", screens[0].id);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/cinemas/{{cinemaId}}/screens",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "cinemas", "{{cinemaId}}", "screens"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Screens",
+			"item": [
+				{
+					"name": "Get All Screens",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const screens = pm.response.json();",
+									"    if (screens.length > 0) {",
+									"        pm.environment.set(\"screenId\", screens[0].id);",
+									"        console.log(\"Screen ID saved:\", screens[0].id);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/screens",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "screens"]
+						}
+					}
+				},
+				{
+					"name": "Get Screen Details",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/screens/{{screenId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "screens", "{{screenId}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Screen Seats",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/screens/{{screenId}}/seats",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "screens", "{{screenId}}", "seats"]
+						}
+					}
+				},
+				{
+					"name": "Get Screens by Cinema",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/screens/cinema/{{cinemaId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "screens", "cinema", "{{cinemaId}}"]
+						}
+					}
+				},
+				{
+					"name": "Create Screen (Admin)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Screen 4\",\n    \"cinemaId\": \"{{cinemaId}}\",\n    \"totalSeats\": 120,\n    \"screenType\": \"4DX\",\n    \"isActive\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/screens",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "screens"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Seats",
+			"item": [
+				{
+					"name": "Get Available Seats by Screen",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/seats/screen/{{screenId}}/available",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "seats", "screen", "{{screenId}}", "available"]
+						}
+					}
+				},
+				{
+					"name": "Check Seat Availability",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Seat availability check works\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('available');",
+									"    pm.expect(jsonData.available).to.be.a('boolean');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"screenId\": \"{{screenId}}\",\n    \"showTimeId\": \"{{showTimeId}}\",\n    \"seatNumbers\": [\"A1\", \"A2\", \"A3\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/seats/check-availability",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "seats", "check-availability"]
+						}
+					}
+				},
+				{
+					"name": "Cleanup Expired Seat Reservations",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"url": {
+							"raw": "{{baseUrl}}/api/seats/cleanup-expired",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "seats", "cleanup-expired"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "User Bookings",
+			"item": [
+				{
+					"name": "Create User Booking",
+					"event": [
+						{
+							"listen": "pre-request",
+							"script": {
+								"exec": [
+									"if (!pm.environment.get(\"token\")) {",
+									"    throw new Error(\"Please login first to get authentication token\");",
+									"}",
+									"if (!pm.environment.get(\"showTimeId\")) {",
+									"    throw new Error(\"Please get movie showtimes first\");",
+									"}"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const booking = pm.response.json();",
+									"    pm.environment.set(\"userBookingId\", booking.id);",
+									"    console.log(\"User Booking ID saved:\", booking.id);",
+									"}",
+									"",
+									"pm.test(\"Booking created successfully\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('id');",
+									"    pm.expect(jsonData).to.have.property('totalAmount');",
+									"    pm.expect(jsonData.status).to.eql('PENDING');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"userId\": \"{{userId}}\",\n    \"showTimeId\": \"{{showTimeId}}\",\n    \"seatNumbers\": [\"A3\", \"A4\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/bookings/user",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "bookings", "user"]
+						}
+					}
+				},
+				{
+					"name": "Get User Bookings",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/bookings/user/{{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "bookings", "user", "{{userId}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Booking Details",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/bookings/{{userBookingId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "bookings", "{{userBookingId}}"]
+						}
+					}
+				},
+				{
+					"name": "Confirm User Booking",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Payment confirmed\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql('CONFIRMED');",
+									"    pm.expect(jsonData.paymentId).to.exist;",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "\"payment_{{$timestamp}}_success\""
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/bookings/{{userBookingId}}/confirm",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "bookings", "{{userBookingId}}", "confirm"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Guest Bookings",
+			"item": [
+				{
+					"name": "Create Guest Booking",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const booking = pm.response.json();",
+									"    pm.environment.set(\"guestBookingId\", booking.bookingId);",
+									"    pm.environment.set(\"guestBookingCode\", booking.bookingCode);",
+									"    pm.environment.set(\"guestEmail\", booking.guestEmail);",
+									"    console.log(\"Guest Booking ID:\", booking.bookingId);",
+									"    console.log(\"Guest Booking Code:\", booking.bookingCode);",
+									"}",
+									"",
+									"pm.test(\"Guest booking created\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('bookingCode');",
+									"    pm.expect(jsonData).to.have.property('paymentUrl');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"guestName\": \"Tran Thi Khach\",\n    \"guestEmail\": \"guest{{$timestamp}}@email.com\",\n    \"guestPhone\": \"090{{$randomInt}}\",\n    \"showTimeId\": \"{{showTimeId}}\",\n    \"seatNumbers\": [\"B1\", \"B2\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/guest-bookings",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "guest-bookings"]
+						}
+					}
+				},
+				{
+					"name": "Get Booking by Code",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/guest-bookings/code/{{guestBookingCode}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "guest-bookings", "code", "{{guestBookingCode}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Bookings by Email",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/guest-bookings/email/{{guestEmail}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "guest-bookings", "email", "{{guestEmail}}"]
+						}
+					}
+				},
+				{
+					"name": "Confirm Guest Booking",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "\"guest_payment_{{$timestamp}}_success\""
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/guest-bookings/{{guestBookingId}}/confirm",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "guest-bookings", "{{guestBookingId}}", "confirm"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Admin Operations",
+			"item": [
+				{
+					"name": "Cleanup Expired User Bookings",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"url": {
+							"raw": "{{baseUrl}}/api/bookings/cleanup-expired",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "bookings", "cleanup-expired"]
+						}
+					}
+				},
+				{
+					"name": "Cleanup Expired Guest Bookings",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"url": {
+							"raw": "{{baseUrl}}/api/guest-bookings/cleanup-expired",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "guest-bookings", "cleanup-expired"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Error Test Cases",
+			"item": [
+				{
+					"name": "Book Already Booked Seats",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Should return conflict error\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([400, 409]);",
+									"    pm.expect(pm.response.text()).to.include(\"already booked\");",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"userId\": \"{{userId}}\",\n    \"showTimeId\": \"{{showTimeId}}\",\n    \"seatNumbers\": [\"A3\", \"A4\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/bookings/user",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "bookings", "user"]
+						}
+					}
+				},
+				{
+					"name": "Book Without Authentication",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Should return unauthorized error\", function () {",
+									"    pm.expect(pm.response.code).to.eql(401);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"userId\": \"{{userId}}\",\n    \"showTimeId\": \"{{showTimeId}}\",\n    \"seatNumbers\": [\"C1\", \"C2\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/bookings/user",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "bookings", "user"]
+						}
+					}
+				},
+				{
+					"name": "Search Invalid Booking Code",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Should return not found error\", function () {",
+									"    pm.expect(pm.response.code).to.eql(404);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/guest-bookings/code/INVALID_CODE_123",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "guest-bookings", "code", "INVALID_CODE_123"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global pre-request script",
+					"pm.globals.set(\"timestamp\", Date.now());",
+					"pm.globals.set(\"randomEmail\", `test${Date.now()}@gmail.com`);",
+					"pm.globals.set(\"randomInt\", Math.floor(Math.random() * 10000000));",
+					"",
+					"// Validate required variables",
+					"const requiredVars = ['baseUrl'];",
+					"requiredVars.forEach(varName => {",
+					"    if (!pm.environment.get(varName) && !pm.globals.get(varName)) {",
+					"        console.warn(`Warning: ${varName} is not set`);",
+					"    }",
+					"});"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global test script",
+					"pm.test(\"Response time is acceptable\", function () {",
+					"    pm.expect(pm.response.responseTime).to.be.below(5000);",
+					"});",
+					"",
+					"pm.test(\"Response has correct content type\", function () {",
+					"    if (pm.response.code !== 404 && pm.response.code !== 401) {",
+					"        pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+					"    }",
+					"});",
+					"",
+					"// Log response for debugging",
+					"if (pm.response.code >= 400) {",
+					"    console.log(\"Error Response:\", pm.response.text());",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		}
+	]
+}
