@@ -1,195 +1,112 @@
 package com.example.demo.Service;
 
-import com.example.demo.DTO.*;
+import com.example.demo.DTO.GuestBookingRequestDTO;
+import com.example.demo.DTO.GuestBookingResponseDTO;
 import com.example.demo.Model.*;
 import com.example.demo.Repository.*;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 public class GuestBookingService {
 
     @Autowired
     private GuestBookingRepository guestBookingRepository;
-
     @Autowired
     private ShowTimeRepository showTimeRepository;
-
     @Autowired
     private MovieRepository movieRepository;
-
     @Autowired
     private CinemaRepository cinemaRepository;
-
     @Autowired
     private ScreenRepository screenRepository;
 
     @Autowired
-    private SeatRepository seatRepository;
-
+    private PayPalService payPalService;
     @Autowired
     private EmailService emailService;
 
+    @Value("${paypal.exchange-rate.vnd-to-usd}")
+    private double exchangeRate;
+
     @Transactional
-    public GuestBookingResponseDTO createGuestBooking(GuestBookingRequestDTO request) {
-        try {
-            // 1. Validate showtime exists and is active
-            ShowTime showTime = showTimeRepository.findById(request.getShowTimeId())
-                .orElseThrow(() -> new RuntimeException("ShowTime not found"));
+    public GuestBookingResponseDTO createGuestBooking(GuestBookingRequestDTO request) throws Exception {
 
-            if (!showTime.isActive()) {
-                throw new RuntimeException("ShowTime is not active");
-            }
+        ShowTime showTime = showTimeRepository.findById(request.getShowTimeId())
+                .orElseThrow(() -> new RuntimeException("ShowTime not found with ID: " + request.getShowTimeId()));
 
-            // 2. Check if showtime is in the future
-            if (showTime.getStartTime().isBefore(LocalDateTime.now())) {
-                throw new RuntimeException("Cannot book past showtimes");
-            }
-
-            // 3. Validate seats are available
-            List<String> requestedSeats = request.getSeatNumbers();
-            if (requestedSeats == null || requestedSeats.isEmpty()) {
-                throw new RuntimeException("No seats selected");
-            }
-
-            // Check if seats are already booked for this showtime
-            List<String> bookedSeats = showTime.getBookedSeats();
-            if (bookedSeats != null && bookedSeats.stream().anyMatch(requestedSeats::contains)) {
-                throw new RuntimeException("Some seats are already booked");
-            }
-
-            // 4. Get seat details and calculate total amount
-            List<Seat> seats = seatRepository.findByScreenIdAndSeatNumberIn(
-                showTime.getScreenId(), requestedSeats);
-
-            if (seats.size() != requestedSeats.size()) {
-                throw new RuntimeException("Some seats not found");
-            }
-
-            double totalAmount = seats.stream().mapToDouble(Seat::getPrice).sum();
-
-            // 5. Get related entities for response
-            Movie movie = movieRepository.findById(showTime.getMovieId())
-                .orElseThrow(() -> new RuntimeException("Movie not found"));
-            Cinema cinema = cinemaRepository.findById(showTime.getCinemaId())
-                .orElseThrow(() -> new RuntimeException("Cinema not found"));
-            Screen screen = screenRepository.findById(showTime.getScreenId())
-                .orElseThrow(() -> new RuntimeException("Screen not found"));
-
-            // 6. Create guest booking
-            GuestBooking guestBooking = new GuestBooking(
-                request.getGuestName(),
-                request.getGuestEmail(),
-                request.getGuestPhone(),
-                request.getShowTimeId(),
-                movie.getId(),
-                cinema.getId(),
-                screen.getId(),
-                requestedSeats,
-                totalAmount
-            );
-
-            GuestBooking savedBooking = guestBookingRepository.save(guestBooking);
-
-            // 7. Reserve seats temporarily (15 minutes)
-            reserveSeatsTemporarily(showTime, requestedSeats, savedBooking.getId());
-
-            // 8. Send confirmation email
-            sendBookingConfirmationEmail(savedBooking, movie, cinema, screen, showTime);
-
-            // 9. Build response
-            return buildGuestBookingResponse(savedBooking, movie, cinema, screen, showTime);
-
-        } catch (Exception e) {
-            throw new RuntimeException("Booking failed: " + e.getMessage());
+        if (!showTime.isActive() || showTime.getStartTime().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("ShowTime is invalid or has already passed.");
         }
+
+        List<String> requestedSeats = request.getSeatNumbers();
+        if (requestedSeats == null || requestedSeats.isEmpty()) {
+            throw new RuntimeException("Please select at least one seat.");
+        }
+
+        List<String> bookedSeats = showTime.getBookedSeats();
+        if (bookedSeats != null && bookedSeats.stream().anyMatch(requestedSeats::contains)) {
+            throw new RuntimeException("One or more of your selected seats have just been booked. Please choose again.");
+        }
+
+        double totalAmountVND = request.getSeatNumbers().size() * showTime.getBasePrice();
+
+        // Step 4: Create booking in DB with PENDING status
+        GuestBooking booking = new GuestBooking(
+                request.getGuestName(), request.getGuestEmail(), request.getGuestPhone(),
+                showTime.getId(), showTime.getMovieId(), showTime.getCinemaId(),
+                showTime.getScreenId(), requestedSeats, totalAmountVND
+        );
+        booking.setStatus(GuestBooking.BookingStatus.PENDING);
+        GuestBooking savedBooking = guestBookingRepository.save(booking);
+
+        double amountInUsd = Math.round((totalAmountVND / exchangeRate) * 100.0) / 100.0;
+        JsonNode orderNode = payPalService.createOrder(amountInUsd, "USD", savedBooking.getId());
+
+        String paymentUrl = null;
+        for (JsonNode link : orderNode.path("links")) {
+            if ("approve".equals(link.path("rel").asText())) {
+                paymentUrl = link.path("href").asText();
+                break;
+            }
+        }
+        if (paymentUrl == null) {
+            throw new RuntimeException("Could not create PayPal payment link.");
+        }
+
+        GuestBookingResponseDTO responseDTO = new GuestBookingResponseDTO();
+        responseDTO.setBookingId(savedBooking.getId());
+        responseDTO.setPaymentUrl(paymentUrl);
+        responseDTO.setGuestName(savedBooking.getGuestName());
+        responseDTO.setTotalAmount(savedBooking.getTotalAmount());
+        responseDTO.setStatus(savedBooking.getStatus().toString());
+
+        return responseDTO;
     }
 
-    private void reserveSeatsTemporarily(ShowTime showTime, List<String> seatNumbers, String bookingId) {
-        // Add seats to showtime's booked seats
-        if (showTime.getBookedSeats() == null) {
-            showTime.setBookedSeats(seatNumbers);
-        } else {
-            showTime.getBookedSeats().addAll(seatNumbers);
-        }
-        showTime.setUpdatedAt(LocalDateTime.now());
-        showTimeRepository.save(showTime);
-
-        // Set seats as temporarily reserved
-        List<Seat> seats = seatRepository.findByScreenIdAndSeatNumberIn(
-            showTime.getScreenId(), seatNumbers);
-
-        for (Seat seat : seats) {
-            seat.setReservedShowTimeId(showTime.getId());
-            seat.setReservedBy(bookingId);
-            seat.setReservationExpiry(LocalDateTime.now().plusMinutes(15));
-            seat.setUpdatedAt(LocalDateTime.now());
-        }
-        seatRepository.saveAll(seats);
-    }
-
-    public GuestBooking confirmBooking(String bookingId, String paymentId) {
+    @Transactional
+    public void confirmBookingFromPayPal(String bookingId, String payPalTransactionId) {
         GuestBooking booking = guestBookingRepository.findById(bookingId)
-            .orElseThrow(() -> new RuntimeException("Booking not found"));
+                .orElseThrow(() -> new RuntimeException("GuestBooking not found with ID: " + bookingId));
 
-        if (booking.getStatus() != GuestBooking.BookingStatus.PENDING) {
-            throw new RuntimeException("Booking is not in pending status");
+        if (booking.getStatus() == GuestBooking.BookingStatus.PENDING) {
+            booking.setStatus(GuestBooking.BookingStatus.CONFIRMED);
+            booking.setPaymentId(payPalTransactionId);
+            booking.setBookingTime(LocalDateTime.now());
+            GuestBooking confirmedBooking = guestBookingRepository.save(booking);
+
+            updateBookedSeatsForShowTime(confirmedBooking);
+
+            sendConfirmationEmail(confirmedBooking);
         }
-
-        if (booking.getExpiryTime().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Booking has expired");
-        }
-
-        booking.setStatus(GuestBooking.BookingStatus.CONFIRMED);
-        booking.setPaymentId(paymentId);
-        booking.setUpdatedAt(LocalDateTime.now());
-
-        return guestBookingRepository.save(booking);
-    }
-
-    public void cancelExpiredBookings() {
-        List<GuestBooking> expiredBookings = guestBookingRepository
-            .findByStatusAndExpiryTimeBefore(GuestBooking.BookingStatus.PENDING, LocalDateTime.now());
-
-        for (GuestBooking booking : expiredBookings) {
-            booking.setStatus(GuestBooking.BookingStatus.EXPIRED);
-            booking.setUpdatedAt(LocalDateTime.now());
-
-            // Release seats
-            releaseSeats(booking);
-        }
-
-        if (!expiredBookings.isEmpty()) {
-            guestBookingRepository.saveAll(expiredBookings);
-        }
-    }
-
-    private void releaseSeats(GuestBooking booking) {
-        // Remove seats from showtime's booked seats
-        ShowTime showTime = showTimeRepository.findById(booking.getShowTimeId()).orElse(null);
-        if (showTime != null && showTime.getBookedSeats() != null) {
-            showTime.getBookedSeats().removeAll(booking.getSeatNumbers());
-            showTime.setUpdatedAt(LocalDateTime.now());
-            showTimeRepository.save(showTime);
-        }
-
-        // Clear seat reservations
-        List<Seat> seats = seatRepository.findByScreenIdAndSeatNumberIn(
-            booking.getScreenId(), booking.getSeatNumbers());
-
-        for (Seat seat : seats) {
-            seat.setReservedShowTimeId(null);
-            seat.setReservedBy(null);
-            seat.setReservationExpiry(null);
-            seat.setUpdatedAt(LocalDateTime.now());
-        }
-        seatRepository.saveAll(seats);
     }
 
     public Optional<GuestBooking> findByBookingCode(String bookingCode) {
@@ -200,60 +117,53 @@ public class GuestBookingService {
         return guestBookingRepository.findByGuestEmailOrderByCreatedAtDesc(email);
     }
 
-    private void sendBookingConfirmationEmail(GuestBooking booking, Movie movie, Cinema cinema,
-                                            Screen screen, ShowTime showTime) {
+
+    private void sendConfirmationEmail(GuestBooking booking) {
         try {
-            String subject = "Booking Confirmation - " + movie.getTitle();
-            String body = buildEmailContent(booking, movie, cinema, screen, showTime);
-            emailService.sendEmail(booking.getGuestEmail(), subject, body);
-        } catch (Exception e) {
-            System.err.println("Failed to send confirmation email: " + e.getMessage());
+            // Fetch all related entities required for the email content
+            ShowTime showTime = showTimeRepository.findById(booking.getShowTimeId())
+                    .orElseThrow(() -> new IllegalStateException("Data Inconsistency: ShowTime not found for booking: " + booking.getId()));
+            Movie movie = movieRepository.findById(booking.getMovieId())
+                    .orElseThrow(() -> new IllegalStateException("Data Inconsistency: Movie not found for booking: " + booking.getId()));
+            Cinema cinema = cinemaRepository.findById(booking.getCinemaId())
+                    .orElseThrow(() -> new IllegalStateException("Data Inconsistency: Cinema not found for booking: " + booking.getId()));
+            Screen screen = screenRepository.findById(booking.getScreenId())
+                    .orElseThrow(() -> new IllegalStateException("Data Inconsistency: Screen not found for booking: " + booking.getId()));
+
+            emailService.sendGuestBookingConfirmationEmail(booking, movie, cinema, screen, showTime);
+
+        } catch (IllegalStateException e) {
+            System.err.println("CRITICAL ERROR: Could not find required data to send confirmation email for booking ID: " + booking.getId() + ". " + e.getMessage());
         }
     }
 
-    private String buildEmailContent(GuestBooking booking, Movie movie, Cinema cinema,
-                                   Screen screen, ShowTime showTime) {
-        return String.format(
-            "Dear %s,\n\n" +
-            "Your booking has been confirmed!\n\n" +
-            "Booking Code: %s\n" +
-            "Movie: %s\n" +
-            "Cinema: %s\n" +
-            "Screen: %s\n" +
-            "Show Time: %s\n" +
-            "Seats: %s\n" +
-            "Total Amount: %.0f VND\n\n" +
-            "Please complete payment within 15 minutes to confirm your booking.\n" +
-            "Present this booking code at the cinema for ticket collection.\n\n" +
-            "Thank you for choosing our cinema!",
-            booking.getGuestName(),
-            booking.getBookingCode(),
-            movie.getTitle(),
-            cinema.getName(),
-            screen.getName(),
-            showTime.getStartTime(),
-            String.join(", ", booking.getSeatNumbers()),
-            booking.getTotalAmount()
-        );
+    /**
+     */
+    private void updateBookedSeatsForShowTime(GuestBooking booking) {
+        showTimeRepository.findById(booking.getShowTimeId()).ifPresent(showTime -> {
+            List<String> currentBookedSeats = showTime.getBookedSeats();
+            if (currentBookedSeats == null) {
+                // Initialize a new list if it's the first booking for this showtime
+                currentBookedSeats = new ArrayList<>();
+            }
+            currentBookedSeats.addAll(booking.getSeatNumbers());
+            showTime.setBookedSeats(currentBookedSeats);
+            showTimeRepository.save(showTime);
+        });
     }
 
-    private GuestBookingResponseDTO buildGuestBookingResponse(GuestBooking booking, Movie movie,
-                                                            Cinema cinema, Screen screen, ShowTime showTime) {
-        GuestBookingResponseDTO response = new GuestBookingResponseDTO();
-        response.setBookingId(booking.getId());
-        response.setBookingCode(booking.getBookingCode());
-        response.setGuestName(booking.getGuestName());
-        response.setGuestEmail(booking.getGuestEmail());
-        response.setMovieTitle(movie.getTitle());
-        response.setCinemaName(cinema.getName());
-        response.setScreenName(screen.getName());
-        response.setShowTime(showTime.getStartTime());
-        response.setSeatNumbers(booking.getSeatNumbers());
-        response.setTotalAmount(booking.getTotalAmount());
-        response.setStatus(booking.getStatus().name());
-        response.setExpiryTime(booking.getExpiryTime());
-        response.setPaymentUrl("/api/payments/guest/" + booking.getId());
 
-        return response;
+    @Transactional
+    public void cancelExpiredBookings() {
+        LocalDateTime expirationThreshold = LocalDateTime.now().minusMinutes(15);
+        List<GuestBooking> expiredBookings = guestBookingRepository.findByStatusAndExpiryTimeBefore(GuestBooking.BookingStatus.PENDING, expirationThreshold);
+
+        if (!expiredBookings.isEmpty()) {
+            for (GuestBooking booking : expiredBookings) {
+                booking.setStatus(GuestBooking.BookingStatus.CANCELLED);
+            }
+            guestBookingRepository.saveAll(expiredBookings);
+            System.out.println("Cancelled " + expiredBookings.size() + " expired guest bookings.");
+        }
     }
 }

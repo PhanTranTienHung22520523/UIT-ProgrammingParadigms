@@ -4,6 +4,7 @@ import com.example.demo.DTO.GuestBookingRequestDTO;
 import com.example.demo.DTO.GuestBookingResponseDTO;
 import com.example.demo.Model.GuestBooking;
 import com.example.demo.Service.GuestBookingService;
+import jakarta.servlet.http.HttpServletRequest; // Import package đúng
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,22 +23,21 @@ public class GuestBookingController {
     @PostMapping
     public ResponseEntity<?> createGuestBooking(@RequestBody GuestBookingRequestDTO request) {
         try {
+            // Chỉ truyền vào `request`, không truyền httpServletRequest nữa
             GuestBookingResponseDTO response = guestBookingService.createGuestBooking(request);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Booking failed: " + e.getMessage());
+            e.printStackTrace(); // In lỗi ra console để dễ debug
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 
+    // Các phương thức khác giữ nguyên, không cần thay đổi
     @GetMapping("/code/{bookingCode}")
     public ResponseEntity<?> getBookingByCode(@PathVariable String bookingCode) {
         try {
             Optional<GuestBooking> booking = guestBookingService.findByBookingCode(bookingCode);
-            if (booking.isPresent()) {
-                return ResponseEntity.ok(booking.get());
-            } else {
-                return ResponseEntity.notFound().build();
-            }
+            return booking.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Error retrieving booking: " + e.getMessage());
         }
@@ -53,16 +53,6 @@ public class GuestBookingController {
         }
     }
 
-    @PostMapping("/{bookingId}/confirm")
-    public ResponseEntity<?> confirmBooking(@PathVariable String bookingId,
-                                          @RequestBody String paymentId) {
-        try {
-            GuestBooking confirmedBooking = guestBookingService.confirmBooking(bookingId, paymentId);
-            return ResponseEntity.ok(confirmedBooking);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Confirmation failed: " + e.getMessage());
-        }
-    }
 
     @PostMapping("/cleanup-expired")
     public ResponseEntity<?> cleanupExpiredBookings() {

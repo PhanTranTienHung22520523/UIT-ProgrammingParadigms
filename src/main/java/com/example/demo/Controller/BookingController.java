@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
+
 
 @RestController
 @RequestMapping("/api/bookings")
@@ -31,32 +33,18 @@ public class BookingController {
     @PostMapping("/user")
     public ResponseEntity<?> createUserBooking(@RequestBody UserBookingRequestDTO request) {
         try {
-            Booking booking = userBookingService.createUserBooking(request);
-            return ResponseEntity.ok(booking);
+            // Thay đổi kiểu dữ liệu của biến `response` thành Map<String, String>
+            Map<String, String> response = userBookingService.createUserBooking(request);
+
+            // Trả về thẳng đối tượng Map này cho frontend
+            return ResponseEntity.ok(response);
+
         } catch (Exception e) {
+            e.printStackTrace(); // In lỗi ra console để dễ debug
             return ResponseEntity.badRequest().body("Booking failed: " + e.getMessage());
         }
     }
 
-    @PostMapping
-    public ResponseEntity<?> createBooking(@RequestBody BookingRequestDTO request) {
-        try {
-            BookingResponseDTO booking = bookingService.createBooking(request);
-            return ResponseEntity.ok(booking);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Lỗi đặt vé: " + e.getMessage());
-        }
-    }
-
-    @PostMapping("/guest")
-    public ResponseEntity<?> createGuestBooking(@RequestBody BookingRequestDTO request) {
-        try {
-            BookingResponseDTO booking = bookingService.createGuestBooking(request);
-            return ResponseEntity.ok(booking);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Lỗi đặt vé khách: " + e.getMessage());
-        }
-    }
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getBookingById(@PathVariable String id) {

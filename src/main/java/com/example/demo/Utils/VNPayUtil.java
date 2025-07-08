@@ -1,79 +1,72 @@
 package com.example.demo.Utils;
 
-import org.apache.commons.codec.digest.HmacAlgorithms;
-import org.apache.commons.codec.digest.HmacUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+@Component
 public class VNPayUtil {
+
+    private static final Logger logger = LoggerFactory.getLogger(VNPayUtil.class);
 
     public static String hmacSHA512(final String key, final String data) {
         try {
             if (key == null || data == null) {
                 throw new NullPointerException();
             }
-            final HmacUtils hmacUtils = new HmacUtils(HmacAlgorithms.HMAC_SHA_512, key);
-            return hmacUtils.hmacHex(data);
-        } catch (Exception ex) {
-            return "";
-        }
-    }
-
-    public static String hashAllFields(Map<String, String> fields) {
-        List<String> fieldNames = new ArrayList<>(fields.keySet());
-        Collections.sort(fieldNames);
-        StringBuilder sb = new StringBuilder();
-
-        Iterator<String> itr = fieldNames.iterator();
-        while (itr.hasNext()) {
-            String fieldName = itr.next();
-            String fieldValue = fields.get(fieldName);
-            if ((fieldValue != null) && (fieldValue.length() > 0)) {
-                sb.append(fieldName);
-                sb.append("=");
-                sb.append(fieldValue);
+            final Mac hmac512 = Mac.getInstance("HmacSHA512");
+            byte[] hmacKeyBytes = key.getBytes();
+            final SecretKeySpec secretKey = new SecretKeySpec(hmacKeyBytes, "HmacSHA512");
+            hmac512.init(secretKey);
+            byte[] dataBytes = data.getBytes(StandardCharsets.UTF_8);
+            byte[] result = hmac512.doFinal(dataBytes);
+            StringBuilder sb = new StringBuilder(2 * result.length);
+            for (byte b : result) {
+                sb.append(String.format("%02x", b));
             }
-            if (itr.hasNext()) {
-                sb.append("&");
-            }
+            return sb.toString();
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate HMAC-SHA512", e);
         }
-        return sb.toString();
     }
 
     public static String getIpAddress(HttpServletRequest request) {
-        String ipAddress;
+        String ipAdress;
         try {
-            // Ưu tiên X-Forwarded-For từ proxy/ngrok
-            ipAddress = request.getHeader("X-Forwarded-For");
-            if (ipAddress != null && !ipAddress.isEmpty() && !ipAddress.equalsIgnoreCase("unknown")) {
-                // Lấy IP đầu tiên nếu có nhiều IP
-                ipAddress = ipAddress.split(",")[0].trim();
-            } else {
-                // Fallback về remote address
-                ipAddress = request.getRemoteAddr();
+            ipAdress = request.getHeader("X-FORWARDED-FOR");
+            if (ipAdress == null || ipAdress.isEmpty() || "unknown".equalsIgnoreCase(ipAdress)) {
+                // Nếu không có header 'X-FORWARDED-FOR', lấy địa chỉ từ kết nối trực tiếp
+                ipAdress = request.getRemoteAddr();
+
+                // *** ĐÂY LÀ PHẦN "CHUYỂN ĐỔI" QUAN TRỌNG ***
+                // Nếu địa chỉ IP là IPv6 của localhost, hãy đổi nó thành IPv4 của localhost
+                if ("0:0:0:0:0:0:0:1".equals(ipAdress) || "::1".equals(ipAdress)) {
+                    ipAdress = "127.0.0.1";
+                }
             }
 
-            // Nếu là IPv6 localhost, chuyển về IPv4
-            if (ipAddress.equals("0:0:0:0:0:0:0:1") || ipAddress.equals("::1")) {
-                ipAddress = "127.0.0.1";
+            // Nếu header 'X-FORWARDED-FOR' chứa nhiều địa chỉ IP, chỉ lấy địa chỉ đầu tiên
+            if (ipAdress != null && ipAdress.contains(",")) {
+                ipAdress = ipAdress.split(",")[0].trim();
             }
 
-            // Validate IP format (basic check)
-            if (ipAddress == null || ipAddress.isEmpty()) {
-                ipAddress = "127.0.0.1";
-            }
-
-        } catch (Exception ex) {
-            ipAddress = "127.0.0.1"; // Default fallback
+        } catch (Exception e) {
+            // Nếu có bất kỳ lỗi nào, trả về một địa chỉ IP mặc định an toàn
+            ipAdress = "127.0.0.1";
+            // Ghi lại log lỗi để debug
+            // logger.error("Failed to get IP address", e);
         }
-        return ipAddress;
+        return ipAdress;
     }
 
     public static String getRandomNumber(int len) {
@@ -83,71 +76,63 @@ public class VNPayUtil {
         for (int i = 0; i < len; i++) {
             sb.append(chars.charAt(rnd.nextInt(chars.length())));
         }
-        // Đảm bảo TxnRef có ít nhất 8 ký tự và bắt đầu bằng timestamp
-        String timestamp = String.valueOf(System.currentTimeMillis()).substring(6); // Lấy 7 ký tự cuối
-        return timestamp + sb.toString();
+        return sb.toString();
     }
 
     public static String getCurrentTimeString() {
+        Calendar cld = Calendar.getInstance(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
         SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMddHHmmss");
-        Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Ho_Chi_Minh")); // Đổi timezone
-        return formatter.format(cal.getTime());
+        return formatter.format(cld.getTime());
     }
 
     public static String formatAmount(long amount) {
-        // VNPay yêu cầu amount x 100 và phải là số nguyên dương
-        if (amount <= 0) {
-            throw new IllegalArgumentException("Amount must be positive");
-        }
         return String.valueOf(amount * 100);
     }
 
     public static long parseAmount(String amountStr) {
-        try {
-            return Long.parseLong(amountStr) / 100; // Chuyển về amount gốc
-        } catch (NumberFormatException e) {
-            return 0;
-        }
-    }
-
-    public static String buildQueryString(Map<String, String> params) throws UnsupportedEncodingException {
-        List<String> fieldNames = new ArrayList<>(params.keySet());
-        Collections.sort(fieldNames);
-        StringBuilder sb = new StringBuilder();
-
-        Iterator<String> itr = fieldNames.iterator();
-        while (itr.hasNext()) {
-            String fieldName = itr.next();
-            String fieldValue = params.get(fieldName);
-            if ((fieldValue != null) && (fieldValue.length() > 0)) {
-                sb.append(URLEncoder.encode(fieldName, StandardCharsets.UTF_8.toString()));
-                sb.append('=');
-                sb.append(URLEncoder.encode(fieldValue, StandardCharsets.UTF_8.toString()));
-            }
-            if (itr.hasNext()) {
-                sb.append('&');
-            }
-        }
-        return sb.toString();
+        return Long.parseLong(amountStr) / 100;
     }
 
     public static String sanitizeOrderInfo(String orderInfo) {
-        if (orderInfo == null) return "Thanh toan don hang";
+        if (orderInfo == null) return "";
+        // Loại bỏ các ký tự không phải chữ, số, hoặc khoảng trắng
+        return orderInfo.replaceAll("[^a-zA-Z0-9 ]", "");
+    }
 
-        // Chỉ giữ chữ cái, số và dấu cách - loại bỏ tất cả ký tự đặc biệt
-        String sanitized = orderInfo.replaceAll("[^a-zA-Z0-9\\s]", "");
+    /**
+     * Phương thức quan trọng: Xây dựng chuỗi query từ Map, sắp xếp theo key và log ra.
+     * @param params Map chứa các tham số
+     * @param encodeValue true nếu muốn URL-encode giá trị, false nếu không
+     * @return Chuỗi query đã được sắp xếp
+     */
+    public static String buildQueryString(Map<String, String> params, boolean encodeValue) {
+        // Sắp xếp các tham số theo thứ tự bảng chữ cái của key
+        List<String> keyList = new ArrayList<>(params.keySet());
+        Collections.sort(keyList);
 
-        // Thay thế nhiều dấu cách liên tiếp bằng 1 dấu cách
-        sanitized = sanitized.replaceAll("\\s+", " ");
-
-        // Giới hạn độ dài và loại bỏ khoảng trắng đầu cuối
-        if (sanitized.length() > 50) {
-            sanitized = sanitized.substring(0, 50);
+        StringBuilder query = new StringBuilder();
+        Iterator<String> itr = keyList.iterator();
+        while (itr.hasNext()) {
+            String key = itr.next();
+            String value = params.get(key);
+            if (value != null && !value.isEmpty()) {
+                query.append(key);
+                query.append("=");
+                try {
+                    if (encodeValue) {
+                        query.append(URLEncoder.encode(value, StandardCharsets.UTF_8.toString()));
+                    } else {
+                        query.append(value);
+                    }
+                } catch (UnsupportedEncodingException e) {
+                    logger.error("Error encoding value for key {}", key, e);
+                    // Or handle it as per your application's needs
+                }
+                if (itr.hasNext()) {
+                    query.append("&");
+                }
+            }
         }
-
-        String result = sanitized.trim();
-
-        // Nếu rỗng thì trả về default
-        return result.isEmpty() ? "Thanh toan don hang" : result;
+        return query.toString();
     }
 }

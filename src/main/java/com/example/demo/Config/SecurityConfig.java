@@ -76,9 +76,11 @@ public class SecurityConfig {
 
                 // User bookings - cần đăng nhập
                 .requestMatchers("/api/bookings/**").authenticated()
-
+                    .requestMatchers("/api/payments/paypal/**" // <-- THÊM DÒNG NÀY
+                    ).permitAll()
                 // Other payment endpoints - cần đăng nhập
                 .requestMatchers("/api/payments/**").authenticated()
+
 
                 // Default - cho phép tất cả để tránh lỗi 403
                 .anyRequest().permitAll()

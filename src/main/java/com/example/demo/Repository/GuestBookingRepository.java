@@ -20,6 +20,7 @@ public interface GuestBookingRepository extends MongoRepository<GuestBooking, St
     List<GuestBooking> findByShowTimeId(String showTimeId);
 
     List<GuestBooking> findByGuestPhoneOrderByCreatedAtDesc(String guestPhone);
+    List<GuestBooking> findByGuestEmail(String guestEmail);
 
     long countByStatus(GuestBooking.BookingStatus status);
 }

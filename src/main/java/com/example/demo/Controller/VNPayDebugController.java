@@ -40,13 +40,13 @@ public class VNPayDebugController {
             vnp_Params.put("vnp_CreateDate", VNPayUtil.getCurrentTimeString());
 
             // Build query string cho hash
-            String hashQuery = VNPayUtil.hashAllFields(vnp_Params);
+            String hashData = VNPayUtil.buildQueryString(vnp_Params, false); // false để không encode
 
             // Create secure hash
-            String vnp_SecureHash = VNPayUtil.hmacSHA512("DEMO", hashQuery);
+            String vnp_SecureHash = VNPayUtil.hmacSHA512("DEMO", hashData);
 
             // Build query string cho URL
-            String urlQuery = VNPayUtil.buildQueryString(vnp_Params);
+            String urlQuery = VNPayUtil.buildQueryString(vnp_Params,true);
 
             // Build final URL
             String paymentUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?" +
@@ -55,7 +55,7 @@ public class VNPayDebugController {
             return ResponseEntity.ok(Map.of(
                 "paymentUrl", paymentUrl,
                 "parameters", vnp_Params,
-                "hashQuery", hashQuery,
+                "hashQuery", hashData,
                 "secureHash", vnp_SecureHash,
                 "ipMethod", "Using VNPayUtil.getIpAddress()"
             ));
